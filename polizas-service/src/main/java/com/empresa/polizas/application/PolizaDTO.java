@@ -4,6 +4,7 @@ import com.empresa.polizas.domain.EstadoPoliza;
 import com.empresa.polizas.domain.TipoPoliza;
 import lombok.Data;
 import java.time.LocalDate;
+import java.math.BigDecimal;
 
 @Data
 public class PolizaDTO {
@@ -12,6 +13,6 @@ public class PolizaDTO {
     private EstadoPoliza estado;
     private LocalDate fechaInicioVigencia;
     private LocalDate fechaFinVigencia;
-    private Double canonMensual;
-    private Double prima;
+    private BigDecimal canonMensual;
+    private BigDecimal prima;
 }

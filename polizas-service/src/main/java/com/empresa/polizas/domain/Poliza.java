@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,10 +35,10 @@ public class Poliza {
     private LocalDate fechaFinVigencia;
 
     @Column(nullable = false)
-    private Double canonMensual;
+    private BigDecimal canonMensual;
 
     @Column(nullable = false)
-    private Double prima;
+    private BigDecimal prima;
 
     @OneToMany(mappedBy = "poliza", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Riesgo> riesgos = new ArrayList<>();
@@ -46,10 +47,8 @@ public class Poliza {
     public void calcularPrima() {
         if (fechaInicioVigencia != null && fechaFinVigencia != null && canonMensual != null) {
             long meses = java.time.temporal.ChronoUnit.MONTHS.between(fechaInicioVigencia, fechaFinVigencia);
-            // Asumiendo que vigencia incluye el mes final o reglas específicas, ajustamos si es necesario.
-            // Para simplicidad: canon * meses. Si meses es 0, al menos 1?
-             if (meses <= 0) meses = 1; 
-            this.prima = canonMensual * meses;
+            if (meses <= 0) meses = 1; 
+            this.prima = canonMensual.multiply(BigDecimal.valueOf(meses));
         }
     }
 }

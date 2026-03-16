@@ -1,6 +1,9 @@
 server:
   port: 8080
 
+app:
+  api-key: secret-key-123
+
 spring:
   application:
     name: polizas-service
@@ -15,6 +18,10 @@ spring:
     url: jdbc:mysql://mysql-db:3306/polizas_db
     username: appuser
     password: apppass
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect

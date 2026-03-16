@@ -50,11 +50,16 @@ Nota: cuando se consumen a través del API Gateway, los endpoints se exponen con
   - Lista pólizas filtrando por tipo y estado.
 
 - `GET /polizas/{id}/riesgos`
-  - Devuelve los riesgos asociados a la póliza.
+  - Devuelve lista de `Riesgo` activos y cancelados de la póliza
 
 - `POST /polizas/{id}/renovar`
-  - Incrementa canon y prima en función de `+IPC`.
-  - Cambia el estado a `RENOVADA` si la operación es válida.
+  - Body: `{"ipc": 5.2}` (porcentaje)
+  - Valida que no esté CANCELADA (RB-002)
+  - `canonMensual` = `canonMensual × (1 + ipc/100)`
+  - `prima` = nuevo canon × meses originales
+  - Fechas de vigencia avanzan al siguiente periodo
+  - Estado → `RENOVADA`
+  - Llama `/core-mock/evento`
 
 - `POST /polizas/{id}/cancelar`
   - Cancela la póliza, aplicando reglas de negocio asociadas.
@@ -62,10 +67,14 @@ Nota: cuando se consumen a través del API Gateway, los endpoints se exponen con
 ### 4.2. Gestión de riesgos
 
 - `POST /polizas/{id}/riesgos`
-  - Agrega un riesgo a una póliza **solo si** el tipo es Colectiva.
+  - Body: Riesgo con `descripcion`
+  - **Solo si** tipo=COLECTIVA (RB-004), sino error 400
+  - Riesgo nuevo estado=ACTIVO
+  - Llama `/core-mock/evento`
 
 - `POST /riesgos/{id}/cancelar`
-  - Cancela un riesgo individual.
+  - Cambia estado del riesgo a CANCELADO (RB-005)
+  - Llama `/core-mock/evento` de la póliza padre
 
 ### 4.3. Integración con CORE (mock)
 
@@ -79,20 +88,82 @@ Nota: cuando se consumen a través del API Gateway, los endpoints se exponen con
     ```
   - Su objetivo es registrar en logs que se intentó enviar la operación al CORE.
 
-### 4.4. Seguridad mínima
-Todas las peticiones al API deben incluir el header obligatorio: `x-api-key: 123456`.
+### 4.4. Seguridad
+
+**Seguridad en API Gateway** (implementada)
+- Filtro global `GlobalApiKeyFilter` para paths `/api/**`
+- Valida `x-api-key: 123456` antes de rutear a `polizas-service`
+- Respuesta 401 si inválida
 
 ## 5. Reglas de negocio
 
-- **Pólizas Individuales**: Solo pueden tener 1 riesgo.
-- **Renovación**:
-    - No se puede renovar una póliza cancelada.
-    - Se ajusta el canon aplicando el IPC configurado para el periodo.
-    - La prima se recalcula como `canon_actualizado × meses_vigencia`.
-- **Cancelación**: La cancelación de una póliza cancela todos sus riesgos.
-- **Agregar Riesgo**: Exige validación del tipo de póliza (solo Colectiva).
+- **RB-001 – Riesgos por tipo de póliza**
+  - Una póliza INDIVIDUAL solo puede tener 1 riesgo.
+  - Una póliza COLECTIVA puede tener uno o muchos riesgos.
+
+- **RB-002 – Renovación de póliza**
+  - Ejemplo: canon=1000, ipc=5 → nuevo canon=1050
+  - Prima se recalcula con mismos meses
+  - Fechas avanzan: 2026-01→2026-06 → 2026-07→2026-12
+  - No se puede renovar una póliza en estado CANCELADA.
+  - La renovación recibe un parámetro `ipc` (porcentaje).
+  - Al renovar:
+    - `canonMensual` = `canonMensual` × (1 + ipc/100).
+    - `prima` se recalcula con el nuevo canon y la misma cantidad de meses de vigencia.
+    - El estado pasa a RENOVADA.
+    - Las fechas de vigencia se mueven al siguiente periodo con la misma duración original.
+
+- **RB-003 – Cancelación de póliza**
+  - Al cancelar una póliza:
+    - El estado de la póliza pasa a CANCELADA.
+    - Todos los riesgos asociados pasan a estado CANCELADO (cascada).
+
+- **RB-004 – Alta de riesgo**
+  - Solo se pueden crear riesgos en pólizas de tipo COLECTIVA.
+  - Intentar agregar un riesgo a una póliza INDIVIDUAL debe devolver un error de negocio.
+
+- **RB-005 – Cancelación de riesgo**
+  - `POST /riesgos/{id}/cancelar` cambia el estado del riesgo a CANCELADO.
+
+## 🧬 Modelo de Dominio (Pólizas y Riesgos)
+
+### Entidad Poliza
+
+- `id`: Long
+- `tipo`: enum { INDIVIDUAL, COLECTIVA }
+- `estado`: enum { VIGENTE, RENOVADA, CANCELADA }
+- `fechaInicioVigencia`: LocalDate
+- `fechaFinVigencia`: LocalDate
+- `canonMensual`: BigDecimal
+- `prima`: BigDecimal (canonMensual × número de meses de vigencia)
+- Relación con Riesgos:
+  - Para tipo INDIVIDUAL: máximo 1 riesgo asociado.
+  - Para tipo COLECTIVA: 1 a N riesgos asociados.
+
+### Entidad Riesgo
+
+- `id`: Long
+- `descripcion`: String
+- `estado`: enum { ACTIVO, CANCELADO }
+- `poliza`: referencia a Poliza (FK poliza_id)
+
+> Nota: Este modelo se implementará con JPA/Hibernate en el microservicio `polizas-service`.
 
 ## 6. Modelo de datos de alto nivel
+
+**Request POST /polizas/{id}/renovar:**
+```json
+{
+  "ipc": 5.2
+}
+```
+
+**Request POST /polizas/{id}/riesgos:**
+```json
+{
+  "descripcion": "Inmueble Calle 123 #45-67"
+}
+```
 
 ### Entidades principales (vista conceptual, sin SQL detallado):
 

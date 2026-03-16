@@ -15,6 +15,10 @@ spring:
             - Path=/api/polizas/**
           filters:
             - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: polizasCircuitBreaker
+                fallbackUri: forward:/fallback/polizas
         
         - id: riesgos-route
           uri: http://polizas-service:8080
@@ -22,6 +26,10 @@ spring:
             - Path=/api/riesgos/**
           filters:
             - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: polizasCircuitBreaker
+                fallbackUri: forward:/fallback/polizas
 
         - id: core-mock-route
           uri: http://polizas-service:8080
@@ -29,6 +37,20 @@ spring:
             - Path=/api/core-mock/**
           filters:
             - StripPrefix=1
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      polizasCircuitBreaker:
+        slidingWindowSize: 10
+        permittedNumberOfCallsInHalfOpenState: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10000
+        registerHealthIndicator: true
+  timelimiter:
+    instances:
+      polizasCircuitBreaker:
+        timeoutDuration: 2s
 ---
 spring:
   config:
