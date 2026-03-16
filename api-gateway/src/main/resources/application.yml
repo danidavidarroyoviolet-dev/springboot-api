@@ -1,0 +1,40 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  profiles:
+    active: default
+  cloud:
+    gateway:
+      routes:
+        - id: polizas-route
+          uri: http://polizas-service:8080
+          predicates:
+            - Path=/api/polizas/**
+          filters:
+            - StripPrefix=1
+        
+        - id: riesgos-route
+          uri: http://polizas-service:8080
+          predicates:
+            - Path=/api/riesgos/**
+          filters:
+            - StripPrefix=1
+
+        - id: core-mock-route
+          uri: http://polizas-service:8080
+          predicates:
+            - Path=/api/core-mock/**
+          filters:
+            - StripPrefix=1
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  data:
+    redis:
+      host: redis
+      port: 6379
